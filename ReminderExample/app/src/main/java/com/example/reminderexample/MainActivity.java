@@ -1,9 +1,16 @@
 package com.example.reminderexample;
 
+import android.Manifest;
+import android.content.ContentResolver;
+import android.database.Cursor;
 import android.database.DataSetObserver;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.CalendarContract;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.LayoutInflater;
@@ -20,11 +27,18 @@ import com.baoyz.swipemenulistview.SwipeMenuCreator;
 import com.baoyz.swipemenulistview.SwipeMenuItem;
 import com.baoyz.swipemenulistview.SwipeMenuListView;
 
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+
 public class MainActivity extends AppCompatActivity
 {
 	
-	SwipeMenuListView listView;
+	private static final int PROJECTION_ID_INDEX = 0;
 	
+	Cursor cur = null;
+	
+	ContentResolver cr = getContentResolver();
+	
+	SwipeMenuListView listView;
 	String[] list = {"One", "Two", "Three"};
 	
 	@Override
@@ -103,9 +117,56 @@ public class MainActivity extends AppCompatActivity
 	void init()
 	{
 		
+	
+		// Submit the query and get a Cursor object back.
+		if ( ActivityCompat.checkSelfPermission( this, Manifest.permission.READ_CALENDAR ) != PERMISSION_GRANTED )
+		{
+			ActivityCompat.requestPermissions( this, new String[]{Manifest.permission.READ_CALENDAR}, 223 );
+			
+		}
+		else
+		{
+			prepareList();
+		}
+		
+	}
+	
+	
+	@Override
+	public void onRequestPermissionsResult( int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults )
+	{
+		if(requestCode==223)
+		{
+			
+			if ( grantResults[ 0 ] == PERMISSION_GRANTED)
+			{
+				
+			}
+			
+		}
+	}
+	
+	@SuppressWarnings( "MissingPermission" )
+	void prepareList()
+	{
+		
+		String[] EVENT_PROJECTION = new String[]{
+				CalendarContract.Calendars._ID};
 		
 		
 		
+		Uri uri = CalendarContract.Calendars.CONTENT_URI;
+		String selection = "((" + CalendarContract.Calendars.IS_PRIMARY + " = ?";
+		String[] selectionArgs = new String[]{"1"};
+		
+		cur = cr.query( uri, EVENT_PROJECTION, selection, selectionArgs, null );
+		
+		long calID = 0;
+	
+		
+		// Get the field values
+		calID = cur.getLong(PROJECTION_ID_INDEX);
+	
 		
 	}
 	
