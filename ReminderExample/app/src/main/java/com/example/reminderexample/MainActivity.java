@@ -1,7 +1,10 @@
 package com.example.reminderexample;
 
 import android.Manifest;
+import android.accounts.Account;
+import android.accounts.AccountManager;
 import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.DataSetObserver;
 import android.graphics.Color;
@@ -13,6 +16,8 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
+import android.util.Patterns;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -21,11 +26,17 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.baoyz.swipemenulistview.SwipeMenu;
 import com.baoyz.swipemenulistview.SwipeMenuCreator;
 import com.baoyz.swipemenulistview.SwipeMenuItem;
 import com.baoyz.swipemenulistview.SwipeMenuListView;
+
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
@@ -36,7 +47,9 @@ public class MainActivity extends AppCompatActivity
 	
 	Cursor cur = null;
 	
-	ContentResolver cr = getContentResolver();
+	ContentResolver cr;
+	
+	int eventID=0;
 	
 	SwipeMenuListView listView;
 	String[] list = {"One", "Two", "Three"};
@@ -47,6 +60,8 @@ public class MainActivity extends AppCompatActivity
 		super.onCreate( savedInstanceState );
 		setContentView( R.layout.activity_main );
 		
+		
+		cr = getContentResolver();
 		listView = (SwipeMenuListView) findViewById( R.id.listview );
 		
 		
@@ -88,6 +103,8 @@ public class MainActivity extends AppCompatActivity
 		listView.setAdapter( new SwipeListAdapter() );
 		
 		
+		init();
+		
 	}
 	
 	
@@ -117,7 +134,7 @@ public class MainActivity extends AppCompatActivity
 	void init()
 	{
 		
-	
+		
 		// Submit the query and get a Cursor object back.
 		if ( ActivityCompat.checkSelfPermission( this, Manifest.permission.READ_CALENDAR ) != PERMISSION_GRANTED )
 		{
@@ -135,28 +152,52 @@ public class MainActivity extends AppCompatActivity
 	@Override
 	public void onRequestPermissionsResult( int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults )
 	{
-		if(requestCode==223)
+		if ( requestCode == 223 )
 		{
 			
-			if ( grantResults[ 0 ] == PERMISSION_GRANTED)
+			if ( grantResults[ 0 ] == PERMISSION_GRANTED )
 			{
 				
 			}
 			
 		}
+		
+		
+		if ( requestCode == 224 )
+		{
+			
+			if ( grantResults[ 0 ] == PERMISSION_GRANTED )
+			{
+				Pattern emailPattern = Patterns.EMAIL_ADDRESS; // API level 8+
+				Account[] accounts = AccountManager.get( this ).getAccounts();
+				for ( Account account : accounts )
+				{
+					if ( emailPattern.matcher( account.name ).matches() )
+					{
+						String possibleEmail = account.name;
+						Log.d( "ACCOUNTS", possibleEmail );
+						
+					}
+				}
+			}
+			
+		}
 	}
 	
-	@SuppressWarnings( "MissingPermission" )
+	@SuppressWarnings("MissingPermission")
 	void prepareList()
 	{
 		
-		String[] EVENT_PROJECTION = new String[]{
+		
+		getAllReminders();
+		
+	/*	String[] EVENT_PROJECTION = new String[]{
 				CalendarContract.Calendars._ID};
 		
 		
 		
 		Uri uri = CalendarContract.Calendars.CONTENT_URI;
-		String selection = "((" + CalendarContract.Calendars.IS_PRIMARY + " = ?";
+		String selection =   CalendarContract.Calendars.IS_PRIMARY + " = ?";
 		String[] selectionArgs = new String[]{"1"};
 		
 		cur = cr.query( uri, EVENT_PROJECTION, selection, selectionArgs, null );
@@ -166,14 +207,18 @@ public class MainActivity extends AppCompatActivity
 		
 		// Get the field values
 		calID = cur.getLong(PROJECTION_ID_INDEX);
-	
+		
+		
+		Log.d( "Calendar", "prepareList: calendar id"+calID );
+	*/
 		
 	}
 	
 	
 	private void add()
 	{
-		
+		addReminderInCalendar();
+		getAllReminders();
 	}
 	
 	
@@ -197,6 +242,121 @@ public class MainActivity extends AppCompatActivity
 		
 	}
 	
+	void getAllReminders()
+	{
+		Cursor cursor = null;
+		final ContentResolver cr = this.getContentResolver();
+		try
+		{
+			cursor = cr.query(Uri.parse(  getCalendarUriBase( true ).toString()+"events"), new String[]{"calendar_id", "title", "description", "dtstart", "dtend", "eventLocation", CalendarContract.Events._ID}, null, null, null );
+			//Cursor cursor = cr.query(Uri.parse("content://calendar/calendars"), new String[]{ "_id", "name" }, null, null, null);
+			
+			Log.i( "Sample Activity", "Cursor size " + cursor.getCount() );
+			String add = null;
+			cursor.moveToFirst();
+			String[] CalNames = new String[ cursor.getCount() ];
+			int[] CalIds = new int[ cursor.getCount() ];
+			for ( int i = 0; i < CalNames.length; i++ )
+			{
+				CalIds[ i ] = cursor.getInt( 0 );
+				CalNames[ i ] = "Event" + cursor.getInt( 0 ) + ": \nTitle: " + cursor.getString( 1 ) + "\nDescription: " +
+						cursor.getString( 2 ) + "\nStart Date: " + new Date( cursor.getLong( 3 ) )
+						+ "\nEnd Date : " + new Date( cursor.getLong( 4 ) ) + "\nLocation : " + cursor.getString( 5 );
+				
+				if ( eventID == cursor.getLong( 6 ) )
+				{
+					Toast.makeText( this, "Found event that was set"+  ": \nTitle: " + cursor.getString( 1 ) + "\nDescription: " +
+							cursor.getString( 2 ), Toast.LENGTH_LONG ).show();
+				}
+					
+				if ( add == null )
+				{
+					add = CalNames[ i ];
+				}
+				else
+				{
+					add += CalNames[ i ];
+				}
+				//        ((TextView)findViewById(R.id.calendars)).setText(add);
+				Log.i( "SAmple Reminder****", "events from calendar " + add );
+				cursor.moveToNext();
+			}
+			cursor.close();
+		}
+		catch ( Exception e )
+		{
+			e.printStackTrace();
+		}
+		
+		if ( cursor != null && !cursor.isClosed() )
+		{
+			cursor.close();
+		}
+		
+	}
+	
+	
+	/**
+	 * Adds Events and Reminders in Calendar.
+	 */
+	private void addReminderInCalendar()
+	{
+		Calendar cal = Calendar.getInstance();
+		Uri EVENTS_URI = Uri.parse(getCalendarUriBase(true).toString() + "events");
+		ContentResolver cr = getContentResolver();
+		TimeZone timeZone = TimeZone.getDefault();
+		
+		// Inserting an event in calendar.
+		ContentValues values = new ContentValues();
+		values.put( CalendarContract.Events.CALENDAR_ID, 1);
+		values.put(CalendarContract.Events.TITLE, "Sample Reminder 01");
+		values.put(CalendarContract.Events.DESCRIPTION, "A test Reminder.");
+		values.put(CalendarContract.Events.ALL_DAY, 0);
+		// event starts at 1 minutes from now
+		values.put(CalendarContract.Events.DTSTART, cal.getTimeInMillis() + 1 * 60 * 1000);
+		// ends 2 minutes from now
+		values.put(CalendarContract.Events.DTEND, cal.getTimeInMillis() + 2 * 60 * 1000);
+		values.put(CalendarContract.Events.EVENT_TIMEZONE, timeZone.getID());
+		values.put(CalendarContract.Events.HAS_ALARM, 1);
+		Uri event = cr.insert(EVENTS_URI, values);
+		
+		// Display event id.
+		Toast.makeText(getApplicationContext(), "Event added :: ID :: " + event.getLastPathSegment(), Toast.LENGTH_SHORT).show();
+		
+		eventID=Integer.parseInt( event.getLastPathSegment() );
+		// Adding reminder for event added.
+		Uri REMINDERS_URI = Uri.parse(getCalendarUriBase(true) + "reminders");
+		values = new ContentValues();
+		values.put(CalendarContract.Reminders.EVENT_ID, Long.parseLong(event.getLastPathSegment()));
+		values.put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT);
+		values.put(CalendarContract.Reminders.MINUTES, 10);
+		cr.insert(REMINDERS_URI, values);
+	}
+	
+	/**
+	 * Returns Calendar Base URI, supports both new and old OS.
+	 */
+	private Uri getCalendarUriBase( boolean eventUri )
+	{
+		Uri calendarURI = null;
+		try
+		{
+			if ( android.os.Build.VERSION.SDK_INT <= 7 )
+			{
+				calendarURI = ( eventUri ) ? Uri.parse( "content://calendar/" ) : Uri.parse( "content://calendar/calendars" );
+			}
+			else
+			{
+				calendarURI = ( eventUri ) ? Uri.parse( "content://com.android.calendar/" ) : Uri
+						.parse( "content://com.android.calendar/calendars" );
+			}
+		}
+		catch ( Exception e )
+		{
+			e.printStackTrace();
+		}
+		return calendarURI;
+	}
 	
 	public class SwipeListAdapter implements ListAdapter
 	{
