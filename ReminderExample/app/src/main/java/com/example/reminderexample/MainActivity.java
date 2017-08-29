@@ -4,7 +4,10 @@ import android.Manifest;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.DataSetObserver;
 import android.graphics.Color;
@@ -32,9 +35,9 @@ import com.baoyz.swipemenulistview.SwipeMenu;
 import com.baoyz.swipemenulistview.SwipeMenuCreator;
 import com.baoyz.swipemenulistview.SwipeMenuItem;
 import com.baoyz.swipemenulistview.SwipeMenuListView;
+import com.google.gson.Gson;
 
 import java.util.Calendar;
-import java.util.Date;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
 
@@ -42,16 +45,18 @@ import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 
 public class MainActivity extends AppCompatActivity
 {
-	
-	private static final int PROJECTION_ID_INDEX = 0;
-	
-	Cursor cur = null;
+	Gson gson;
 	
 	ContentResolver cr;
 	
-	int eventID=0;
+	int calendarID = 1;
+	
+	String eventTitle = "";
+	long eventID;
 	
 	SwipeMenuListView listView;
+	
+	
 	String[] list = {"One", "Two", "Three"};
 	
 	@Override
@@ -61,7 +66,12 @@ public class MainActivity extends AppCompatActivity
 		setContentView( R.layout.activity_main );
 		
 		
+		gson = new Gson();
+		
+		
 		cr = getContentResolver();
+		
+		
 		listView = (SwipeMenuListView) findViewById( R.id.listview );
 		
 		
@@ -80,6 +90,7 @@ public class MainActivity extends AppCompatActivity
 				// create "delete" item
 				SwipeMenuItem deleteItem = new SwipeMenuItem(
 						getApplicationContext() );
+				
 				// set item background
 				deleteItem.setBackground( new ColorDrawable( Color.rgb( 0xF9,
 						0x3F, 0x25 ) ) );
@@ -99,11 +110,37 @@ public class MainActivity extends AppCompatActivity
 // set creator
 		listView.setMenuCreator( creator );
 		
+		listView.setOnMenuItemClickListener( new SwipeMenuListView.OnMenuItemClickListener()
+		{
+			@Override
+			public boolean onMenuItemClick( int position, SwipeMenu menu, int index )
+			{
+				
+				
+				switch ( index )
+				{
+					case 0:
+						
+						delete();
+						break;
+					case 1:
+						// delete
+						break;
+				}
+				// false : close the menu; true : not close the menu
+				return false;
+			}
+		} );
 		
-		listView.setAdapter( new SwipeListAdapter() );
+		getAllReminders();
 		
 		
-		init();
+		add();
+		
+		//listView.setAdapter( new SwipeListAdapter() );
+		
+		
+		//init();
 		
 	}
 	
@@ -238,7 +275,15 @@ public class MainActivity extends AppCompatActivity
 	
 	void delete()
 	{
+		int iNumRowsDeleted = 0;
 		
+		Uri eventsUri = Uri.parse( getCalendarUriBase( true ) + "events" );
+		Uri eventUri = ContentUris.withAppendedId( eventsUri, eventID );
+		iNumRowsDeleted = getContentResolver().delete( eventUri, null, null );
+		
+		Toast.makeText( this, "Deleted " + iNumRowsDeleted + " calendar entry.", Toast.LENGTH_SHORT ).show();
+		
+		//return iNumRowsDeleted;
 		
 	}
 	
@@ -248,40 +293,42 @@ public class MainActivity extends AppCompatActivity
 		final ContentResolver cr = this.getContentResolver();
 		try
 		{
-			cursor = cr.query(Uri.parse(  getCalendarUriBase( true ).toString()+"events"), new String[]{"calendar_id", "title", "description", "dtstart", "dtend", "eventLocation", CalendarContract.Events._ID}, null, null, null );
+			cursor = cr.query( Uri.parse( getCalendarUriBase( true ).toString() + "events" ), new String[]{"calendar_id", "title", "description", "dtstart", "dtend", "eventLocation", CalendarContract.Events._ID}, null, null, null );
 			//Cursor cursor = cr.query(Uri.parse("content://calendar/calendars"), new String[]{ "_id", "name" }, null, null, null);
 			
-			Log.i( "Sample Activity", "Cursor size " + cursor.getCount() );
-			String add = null;
+			Log.d( "Sample Activity", "Cursor size " + cursor.getCount() );
+			
 			cursor.moveToFirst();
 			String[] CalNames = new String[ cursor.getCount() ];
+			list = new String[ cursor.getCount() ];
+			
 			int[] CalIds = new int[ cursor.getCount() ];
+			
+			calendarID = cursor.getInt( 0 );
 			for ( int i = 0; i < CalNames.length; i++ )
 			{
-				CalIds[ i ] = cursor.getInt( 0 );
-				CalNames[ i ] = "Event" + cursor.getInt( 0 ) + ": \nTitle: " + cursor.getString( 1 ) + "\nDescription: " +
-						cursor.getString( 2 ) + "\nStart Date: " + new Date( cursor.getLong( 3 ) )
-						+ "\nEnd Date : " + new Date( cursor.getLong( 4 ) ) + "\nLocation : " + cursor.getString( 5 );
 				
-				if ( eventID == cursor.getLong( 6 ) )
+				
+				CalIds[ i ] = cursor.getInt( 0 );
+				CalNames[ i ] = " \nTitle: " + cursor.getString( 1 );
+				
+				if ( eventTitle.equals( CalNames[ i ] ) )
 				{
-					Toast.makeText( this, "Found event that was set"+  ": \nTitle: " + cursor.getString( 1 ) + "\nDescription: " +
-							cursor.getString( 2 ), Toast.LENGTH_LONG ).show();
+					Toast.makeText( this, "Found event that was set" + ": \nTitle: " + cursor.getString( 1 ), Toast.LENGTH_LONG ).show();
 				}
-					
-				if ( add == null )
-				{
-					add = CalNames[ i ];
-				}
-				else
-				{
-					add += CalNames[ i ];
-				}
-				//        ((TextView)findViewById(R.id.calendars)).setText(add);
-				Log.i( "SAmple Reminder****", "events from calendar " + add );
+				
+				
+				list[ i ] = CalNames[ i ];
+				
+				
 				cursor.moveToNext();
 			}
 			cursor.close();
+			
+			//listView.setAdapter( null );
+			listView.setAdapter( new SwipeListAdapter() );
+			
+			
 		}
 		catch ( Exception e )
 		{
@@ -302,35 +349,63 @@ public class MainActivity extends AppCompatActivity
 	private void addReminderInCalendar()
 	{
 		Calendar cal = Calendar.getInstance();
-		Uri EVENTS_URI = Uri.parse(getCalendarUriBase(true).toString() + "events");
+		Uri EVENTS_URI = Uri.parse( getCalendarUriBase( true ).toString() + "events" );
 		ContentResolver cr = getContentResolver();
 		TimeZone timeZone = TimeZone.getDefault();
 		
+		
+		ReminderModel reminderModel = new ReminderModel();
+		reminderModel.ECalendarID = calendarID;
+		reminderModel.ETitle = "Sample Reminder 0000000001";
+		reminderModel.EDescription = "A test Reminder.";
+		reminderModel.EAllDay = 0;
+		reminderModel.DTSTART = cal.getTimeInMillis() + 2 * 60 * 1000;
+		reminderModel.DTEND = cal.getTimeInMillis() + 10 * 60 * 1000;
+		reminderModel.ETimeZone = timeZone.getID();
+		reminderModel.HAS_ALARM = 1;
+		
 		// Inserting an event in calendar.
 		ContentValues values = new ContentValues();
-		values.put( CalendarContract.Events.CALENDAR_ID, 1);
-		values.put(CalendarContract.Events.TITLE, "Sample Reminder 01");
-		values.put(CalendarContract.Events.DESCRIPTION, "A test Reminder.");
-		values.put(CalendarContract.Events.ALL_DAY, 0);
+		values.put( CalendarContract.Events.CALENDAR_ID, calendarID );
+		values.put( CalendarContract.Events.TITLE, reminderModel.ETitle );
+		values.put( CalendarContract.Events.DESCRIPTION, reminderModel.EDescription );
+		values.put( CalendarContract.Events.ALL_DAY, reminderModel.EAllDay );
 		// event starts at 1 minutes from now
-		values.put(CalendarContract.Events.DTSTART, cal.getTimeInMillis() + 1 * 60 * 1000);
+		values.put( CalendarContract.Events.DTSTART, reminderModel.DTSTART );
 		// ends 2 minutes from now
-		values.put(CalendarContract.Events.DTEND, cal.getTimeInMillis() + 2 * 60 * 1000);
-		values.put(CalendarContract.Events.EVENT_TIMEZONE, timeZone.getID());
-		values.put(CalendarContract.Events.HAS_ALARM, 1);
-		Uri event = cr.insert(EVENTS_URI, values);
+		values.put( CalendarContract.Events.DTEND, reminderModel.DTEND );
+		values.put( CalendarContract.Events.EVENT_TIMEZONE, reminderModel.ETimeZone );
+		values.put( CalendarContract.Events.HAS_ALARM, reminderModel.HAS_ALARM );
+		//values.put( CalendarContract.Events.RRULE,CalendarContract.Events.  );
+		Uri event = cr.insert( EVENTS_URI, values );
 		
 		// Display event id.
-		Toast.makeText(getApplicationContext(), "Event added :: ID :: " + event.getLastPathSegment(), Toast.LENGTH_SHORT).show();
+		Toast.makeText( getApplicationContext(), "Event added :: ID :: " + event.getLastPathSegment(), Toast.LENGTH_SHORT ).show();
 		
-		eventID=Integer.parseInt( event.getLastPathSegment() );
+		eventTitle = "Sample Reminder 0000000001";
 		// Adding reminder for event added.
-		Uri REMINDERS_URI = Uri.parse(getCalendarUriBase(true) + "reminders");
+		eventID = Long.parseLong( event.getLastPathSegment() );
+		
+		reminderModel.EventID = eventID;
+		reminderModel.MEHTOD = CalendarContract.Reminders.METHOD_ALERT;
+		reminderModel.MINUTES = 1;
+		Uri REMINDERS_URI = Uri.parse( getCalendarUriBase( true ) + "reminders" );
 		values = new ContentValues();
-		values.put(CalendarContract.Reminders.EVENT_ID, Long.parseLong(event.getLastPathSegment()));
-		values.put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT);
-		values.put(CalendarContract.Reminders.MINUTES, 10);
-		cr.insert(REMINDERS_URI, values);
+		values.put( CalendarContract.Reminders.EVENT_ID, eventID );
+		values.put( CalendarContract.Reminders.METHOD, reminderModel.MEHTOD );
+		values.put( CalendarContract.Reminders.MINUTES, reminderModel.MINUTES );
+		Uri res = cr.insert( REMINDERS_URI, values );
+		
+		long reminderID = Long.parseLong( res.getLastPathSegment() );
+		
+		if ( reminderID > 0 )
+		{
+			
+			saveReminder( reminderModel );
+			
+		}
+		
+		
 	}
 	
 	/**
@@ -357,6 +432,98 @@ public class MainActivity extends AppCompatActivity
 		}
 		return calendarURI;
 	}
+	
+	
+	void tryFetchingData()
+	{
+		
+		Context context = getApplicationContext();
+		SharedPreferences sharedPref = context.getSharedPreferences( getPackageName(), Context.MODE_PRIVATE );
+		
+		
+		String json = sharedPref.getString( "data", null );
+		
+		if ( json != null )
+		{
+			
+			ReminderModel[] reminders = gson.fromJson( json, ReminderModel[].class );
+			
+			if(reminders.length>0)
+			{
+				
+				list=new String[reminders.length];
+				
+				for(int count=0; )
+				
+				
+			}
+			
+		}
+		else
+		{
+			Toast.makeText( context, "No reminders added yet.", Toast.LENGTH_SHORT ).show();
+			
+			
+		}
+		
+		
+	}
+	
+	
+	void saveReminder( ReminderModel reminderModel )
+	{
+		
+		Context context = getApplicationContext();
+		SharedPreferences sharedPref = context.getSharedPreferences( getPackageName(), Context.MODE_PRIVATE );
+		SharedPreferences.Editor editor = sharedPref.edit();
+		
+		
+		String savedJson = sharedPref.getString( "data", null );
+		
+		if ( savedJson != null )
+		{
+			
+			ReminderModel[] savedReminders = gson.fromJson( savedJson, ReminderModel[].class );
+			
+			ReminderModel[] tempReminders = new ReminderModel[ savedReminders.length + 1 ];
+			
+			for ( int i = 0; i < savedReminders.length; i++ )
+			{
+				
+				tempReminders[ i ] = savedReminders[ i ];
+				
+			}
+			
+			tempReminders[ savedReminders.length ] = reminderModel;
+			
+			String json = gson.toJson( tempReminders );
+			
+			Log.d( "Saved_Reminders", json );
+			
+			
+			editor.putString( "data", json );
+			
+		}
+		else
+		{
+			ReminderModel[] remindersModel = new ReminderModel[ 1 ];
+			remindersModel[ 0 ] = reminderModel;
+			String json = gson.toJson( remindersModel );
+			
+			Log.d( "Saved_Reminders", json );
+			
+			
+			editor.putString( "data", json );
+			
+			
+		}
+		
+		
+		editor.commit();
+		
+		
+	}
+	
 	
 	public class SwipeListAdapter implements ListAdapter
 	{
@@ -389,7 +556,7 @@ public class MainActivity extends AppCompatActivity
 		@Override
 		public int getCount()
 		{
-			return 3;
+			return list.length;
 		}
 		
 		@Override
@@ -442,7 +609,7 @@ public class MainActivity extends AppCompatActivity
 		@Override
 		public boolean isEmpty()
 		{
-			return false;
+			return list.length > 0;
 		}
 	}
 }
