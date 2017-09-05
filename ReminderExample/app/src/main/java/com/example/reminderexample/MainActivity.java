@@ -37,6 +37,8 @@ import com.baoyz.swipemenulistview.SwipeMenuItem;
 import com.baoyz.swipemenulistview.SwipeMenuListView;
 import com.google.gson.Gson;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
@@ -46,6 +48,9 @@ import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 public class MainActivity extends AppCompatActivity
 {
 	Gson gson;
+	
+	
+	ArrayList<ReminderModel> reminders;
 	
 	ContentResolver cr;
 	
@@ -78,6 +83,8 @@ public class MainActivity extends AppCompatActivity
 		Toolbar toolbar = (Toolbar) findViewById( R.id.toolbar );
 		
 		setSupportActionBar( toolbar );
+		
+		
 		
 		
 		SwipeMenuCreator creator = new SwipeMenuCreator()
@@ -121,7 +128,7 @@ public class MainActivity extends AppCompatActivity
 				{
 					case 0:
 						
-						delete();
+						delete( position );
 						break;
 					case 1:
 						// delete
@@ -132,15 +139,16 @@ public class MainActivity extends AppCompatActivity
 			}
 		} );
 		
-		getAllReminders();
+		//getAllReminders();
 		
 		
-		add();
+		//add();
 		
 		//listView.setAdapter( new SwipeListAdapter() );
 		
 		
 		//init();
+		tryFetchingData();
 		
 	}
 	
@@ -226,7 +234,7 @@ public class MainActivity extends AppCompatActivity
 	{
 		
 		
-		getAllReminders();
+		//	getAllReminders();
 		
 	/*	String[] EVENT_PROJECTION = new String[]{
 				CalendarContract.Calendars._ID};
@@ -255,7 +263,8 @@ public class MainActivity extends AppCompatActivity
 	private void add()
 	{
 		addReminderInCalendar();
-		getAllReminders();
+		//getAllReminders();
+		tryFetchingData();
 	}
 	
 	
@@ -273,15 +282,41 @@ public class MainActivity extends AppCompatActivity
 	}
 	
 	
-	void delete()
+	void delete( int position )
 	{
-		int iNumRowsDeleted = 0;
+		if ( reminders.size() > 0 && reminders.size() <= position )
+		{
+			int iNumRowsDeleted = 0;
+			
+			eventID = reminders.get( position ).EventID;
+			
+			Uri eventsUri = Uri.parse( getCalendarUriBase( true ) + "events" );
+			Uri eventUri = ContentUris.withAppendedId( eventsUri, eventID );
+			iNumRowsDeleted = getContentResolver().delete( eventUri, null, null );
+			
+			Toast.makeText( this, "Deleted " + iNumRowsDeleted + " calendar entry.", Toast.LENGTH_SHORT ).show();
+			
+			
+		}
 		
-		Uri eventsUri = Uri.parse( getCalendarUriBase( true ) + "events" );
-		Uri eventUri = ContentUris.withAppendedId( eventsUri, eventID );
-		iNumRowsDeleted = getContentResolver().delete( eventUri, null, null );
 		
-		Toast.makeText( this, "Deleted " + iNumRowsDeleted + " calendar entry.", Toast.LENGTH_SHORT ).show();
+		reminders.remove( position );
+		
+		
+		Context context = getApplicationContext();
+		SharedPreferences sharedPref = context.getSharedPreferences( getPackageName(), Context.MODE_PRIVATE );
+		SharedPreferences.Editor editor = sharedPref.edit();
+		
+		
+		String json = gson.toJson( reminders.toArray( new ReminderModel[ 0 ] ) );
+		
+		
+		editor.putString( "data", json );
+		
+		editor.commit();
+		
+		listView.setAdapter( new SwipeListAdapter() );
+		
 		
 		//return iNumRowsDeleted;
 		
@@ -356,7 +391,7 @@ public class MainActivity extends AppCompatActivity
 		
 		ReminderModel reminderModel = new ReminderModel();
 		reminderModel.ECalendarID = calendarID;
-		reminderModel.ETitle = "Sample Reminder 0000000001";
+		reminderModel.ETitle = "Sample Reminder with ID ";
 		reminderModel.EDescription = "A test Reminder.";
 		reminderModel.EAllDay = 0;
 		reminderModel.DTSTART = cal.getTimeInMillis() + 2 * 60 * 1000;
@@ -382,7 +417,7 @@ public class MainActivity extends AppCompatActivity
 		// Display event id.
 		Toast.makeText( getApplicationContext(), "Event added :: ID :: " + event.getLastPathSegment(), Toast.LENGTH_SHORT ).show();
 		
-		eventTitle = "Sample Reminder 0000000001";
+		eventTitle = "Sample Reminder with ID ";
 		// Adding reminder for event added.
 		eventID = Long.parseLong( event.getLastPathSegment() );
 		
@@ -405,6 +440,8 @@ public class MainActivity extends AppCompatActivity
 			
 		}
 		
+		
+		tryFetchingData();
 		
 	}
 	
@@ -448,14 +485,17 @@ public class MainActivity extends AppCompatActivity
 			
 			ReminderModel[] reminders = gson.fromJson( json, ReminderModel[].class );
 			
-			if(reminders.length>0)
+			
+			
+			this.reminders = new ArrayList<>( Arrays.asList( reminders ) );
+			
+			
+			if ( reminders.length > 0 )
+				
+				listView.setAdapter( new SwipeListAdapter() );
+			else
 			{
-				
-				list=new String[reminders.length];
-				
-				for(int count=0; )
-				
-				
+				Toast.makeText( this, "No reminders added yet", Toast.LENGTH_SHORT ).show();
 			}
 			
 		}
@@ -556,13 +596,13 @@ public class MainActivity extends AppCompatActivity
 		@Override
 		public int getCount()
 		{
-			return list.length;
+			return reminders.size();
 		}
 		
 		@Override
 		public Object getItem( int position )
 		{
-			return list[ position ];
+			return reminders.get( position ).ETitle;
 		}
 		
 		@Override
@@ -588,7 +628,7 @@ public class MainActivity extends AppCompatActivity
 			
 			TextView textView = (TextView) convertView.findViewById( R.id.item_text );
 			
-			textView.setText( list[ position ] );
+			textView.setText( reminders.get( position ).ETitle + " : " + reminders.get( position ).EventID );
 			
 			
 			return convertView;
